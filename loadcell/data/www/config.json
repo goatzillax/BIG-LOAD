@@ -1,0 +1,11 @@
+{
+	"loadcell" : {
+		"pin_dout" : 13,
+		"pin_sck"  : 15,
+		"cal_reading" : 1,
+		"cal_weight" : 1,
+		"offset" : 0
+
+	}
+
+}
