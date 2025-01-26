@@ -15,7 +15,11 @@
 
 #define FS LittleFS
 
+unsigned long loadcell_last = 0;
+#define LOADCELL_REFRESHING 500
+
 long weight = 0;
+long reading = 0;
 
 void i_am_error() {
 	Serial.flush();
@@ -38,6 +42,7 @@ unsigned long oled_last = 0;
 void oled_refresh() {
 	if (millis() - oled_last > OLED_REFRESHING) {
 		oled_last = millis();
+		display.clearDisplay();
 		display.setFont(&Font4x7Fixed);
 		display.setTextWrap(false);
 		display.setTextSize(1);
@@ -55,6 +60,18 @@ void oled_refresh() {
 }
 
 HX711 loadcell;
+
+void loadcell_refresh() {
+	//Serial.println("reading loadcell");
+	if (millis() - loadcell_last > LOADCELL_REFRESHING) {
+		loadcell_last = millis();
+		reading = loadcell.get_units(10);  // i legit do not know WTF this library is doing fr fr
+
+		//y = -237.3709 - 0.002405105*x + 2.154818e-11*x^2
+
+		weight = 2.154818e-11*reading*reading - 0.002405105f*reading -237.3709f;
+	}
+}
 
 void setup_loadcell(const char *cfgfile) {
 	File file = FS.open(cfgfile,"r");
@@ -79,7 +96,7 @@ void setup_loadcell(const char *cfgfile) {
 	//  so to calibrate scale use 1 / 1 + 0 in config.json, then update values
 
 	loadcell.set_scale((float) loadcell_cfg["loadcell"]["cal_reading"] / (float) loadcell_cfg["loadcell"]["cal_weight"]);
-	loadcell.set_offset(loadcell_cfg["loadcell"]["offset"]);
+	loadcell.set_offset(loadcell_cfg["loadcell"]["offset"]);  //  mount itself is about 17g now
 }
 
 AsyncWebServer webserver(80);
@@ -87,6 +104,9 @@ AsyncWebServer webserver(80);
 String html_processor(const String& var) {
 	if (var == "weight") {
 		return String(weight);
+	}
+	if (var == "reading") {
+		return String(reading);
 	}
         return String();
 }
@@ -144,7 +164,7 @@ void setup() {
 
 void loop() {
 	ElegantOTA.loop();
+	loadcell_refresh();
 	oled_refresh();
-	//  todo:  actually read the snesor
 	delay(100);
 }
