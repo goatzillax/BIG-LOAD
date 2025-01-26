@@ -19,7 +19,9 @@ unsigned long loadcell_last = 0;
 #define LOADCELL_REFRESHING 500
 
 long weight = 0;
-long reading = 0;
+long full_weight = 0;
+long remaining = 0;
+long reading = 0;  // raw
 
 void i_am_error() {
 	Serial.flush();
@@ -37,23 +39,59 @@ void setup_oled(const char *cfgfile) {
 }
 
 unsigned long oled_last = 0;
-#define OLED_REFRESHING 500
+#define OLED_REFRESHING 1000
+unsigned long oled_state = 0;
 
 void oled_refresh() {
 	if (millis() - oled_last > OLED_REFRESHING) {
 		oled_last = millis();
-		display.clearDisplay();
-		display.setFont(&Font4x7Fixed);
-		display.setTextWrap(false);
-		display.setTextSize(1);
-		display.setCursor(0, 7);  //  custom fonts go "up"?
-		display.println(WiFi.localIP());
 
-		display.setFont();  //  return to system font
-		display.setTextWrap(true);
-		display.setTextSize(2);
-		display.setCursor(0, 8);
-		display.println(weight);
+		oled_state = oled_state % 3;  //  max states
+
+		if (oled_state == 0) {
+			display.clearDisplay();
+			display.setFont(&Font4x7Fixed);
+			display.setTextWrap(false);
+			display.setTextSize(1);
+			display.setCursor(0, 7);  //  custom fonts go "up"?
+			display.println(WiFi.localIP());
+
+			display.setFont();  //  return to system font
+			display.setTextWrap(true);
+			display.setTextSize(2);
+			display.setCursor(0, 8);
+			display.println(weight);
+		}
+		if (oled_state == 1) {
+			display.clearDisplay();
+			display.setFont(&Font4x7Fixed);
+			display.setTextWrap(false);
+			display.setTextSize(1);
+			display.setCursor(0, 7);  //  custom fonts go "up"?
+			display.println("REMAINING");
+
+			display.setFont();  //  return to system font
+			display.setTextWrap(true);
+			display.setTextSize(2);
+			display.setCursor(0, 8);
+			display.println(remaining);
+		}
+		if (oled_state == 2) {
+			display.clearDisplay();
+			display.setFont(&Font4x7Fixed);
+			display.setTextWrap(false);
+			display.setTextSize(1);
+			display.setCursor(0, 7);  //  custom fonts go "up"?
+			display.println("FULL");
+
+			display.setFont();  //  return to system font
+			display.setTextWrap(true);
+			display.setTextSize(2);
+			display.setCursor(0, 8);
+			display.println(full_weight);
+		}
+
+		oled_state++;
 
 		display.display();
 	}
@@ -61,15 +99,26 @@ void oled_refresh() {
 
 HX711 loadcell;
 
+#define FULL_SPOOL	1000
+#define MOUNT_WEIGHT	17
+
 void loadcell_refresh() {
 	//Serial.println("reading loadcell");
 	if (millis() - loadcell_last > LOADCELL_REFRESHING) {
 		loadcell_last = millis();
-		reading = loadcell.get_units(10);  // i legit do not know WTF this library is doing fr fr
 
-		//y = -237.3709 - 0.002405105*x + 2.154818e-11*x^2
+		if (loadcell.wait_ready_timeout(250)) {
+			reading = loadcell.get_units(10);  //  some sort of async would be bettr but whatevs
+			// i legit do not know WTF this library is doing fr fr
+			//y = -237.3709 - 0.002405105*x + 2.154818e-11*x^2
+			weight = 2.154818e-11*reading*reading - 0.002405105f*reading -236.5709f;
+			remaining = FULL_SPOOL - (full_weight - weight - MOUNT_WEIGHT);
+		}
+		else {
+			Serial.println("ur load bad mang");
+			//  don't want no crashn so we just let it slide
+		}
 
-		weight = 2.154818e-11*reading*reading - 0.002405105f*reading -237.3709f;
 	}
 }
 
@@ -96,7 +145,7 @@ void setup_loadcell(const char *cfgfile) {
 	//  so to calibrate scale use 1 / 1 + 0 in config.json, then update values
 
 	loadcell.set_scale((float) loadcell_cfg["loadcell"]["cal_reading"] / (float) loadcell_cfg["loadcell"]["cal_weight"]);
-	loadcell.set_offset(loadcell_cfg["loadcell"]["offset"]);  //  mount itself is about 17g now
+	loadcell.set_offset(loadcell_cfg["loadcell"]["offset"]);  //  I'm just not using this.
 }
 
 AsyncWebServer webserver(80);
@@ -108,13 +157,36 @@ String html_processor(const String& var) {
 	if (var == "reading") {
 		return String(reading);
 	}
+
+	if (var == "full_weight") {
+		return String(full_weight);
+	}
+
+	if (var == "remaining") {
+		return String(remaining);
+	}
+
         return String();
+}
+
+//  todo:  only handle config.json uploading
+void handleUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final){
+	//  how does this even work?  seems like we should spool it to a temp file and then on file move it in place?
+	if(!index){
+		Serial.printf("UploadStart: %s\n", filename.c_str());
+	}
+	for(size_t i=0; i<len; i++){
+		Serial.write(data[i]);
+	}
+	if(final){
+		Serial.printf("UploadEnd: %s, %u B\n", filename.c_str(), index+len);
+	}
 }
 
 void setup_wifi(const char *cfgfile) {
 	File file = FS.open(cfgfile,"r");
 
-	StaticJsonDocument<2048> doc;
+	StaticJsonDocument<2048> doc;  //  ssid, psk, hostname
 
 	DeserializationError error = deserializeJson(doc, file);
 
@@ -126,6 +198,7 @@ void setup_wifi(const char *cfgfile) {
 	file.close();
 
 	WiFi.persistent(false);  //  starting to have flashbacks regarding hostnames, mdns, and light sleep.
+	WiFi.hostname(String(doc["hostname"]));
 	WiFi.mode(WIFI_STA);
 
 	WiFi.begin(String(doc["ssid"]), String(doc["psk"]));
@@ -140,6 +213,23 @@ void setup_wifi(const char *cfgfile) {
 //	});
 
 	webserver.serveStatic("/", FS, "/www/").setDefaultFile("index.html").setTemplateProcessor(html_processor);
+
+	webserver.on("/action_page.php", HTTP_GET, [](AsyncWebServerRequest *request) {
+		AsyncWebParameter *p = NULL;
+		if (request->hasParam("cmd")) {
+			p = request->getParam("cmd");
+
+			if (p->value().compareTo("set_full_weight") == 0) {
+				//  can't reset here because we can't confirm the client has moved off this URL...
+				if (request->hasParam("full_weight")) {
+					//  need error checking
+					full_weight =  strtoul(request->getParam("full_weight")->value().c_str(), NULL, 10);  //  lolc++
+				}
+				request->redirect("/");
+			}
+		}
+		request->redirect("/");
+	});
 
 	webserver.begin();
 

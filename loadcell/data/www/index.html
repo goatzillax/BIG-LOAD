@@ -2,8 +2,16 @@
 <body>
 Henlo gruel worlkd.<br>
 <br>
-Weight:  %weight%<br>
-Raw:  %reading%<br>
+Weight:		%weight%<br>
+Remaining:	%remaining%<br>
+Full Weight:	%full_weight%<br>
+Raw:		%reading%<br>
+<br>
+<form action="/action_page.php">
+<input type="text" id="full_weight" name="full_weight">
+<input type="radio" name="cmd" value="set_full_weight" checked required>
+<input type="submit" value="Set Full Weight">
+</form>
 <br>
 <a href=config.json>config.json</a>
 <br>
