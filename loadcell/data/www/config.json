@@ -1,9 +1,11 @@
 {
-	"loadcell" : {
-		"pin_dout" : 13,
-		"pin_sck"  : 15,
-		"cal_reading" : 1,
-		"cal_weight" : 1,
-		"offset" : 0
-	}
+	"pin_dout" : 13,
+	"pin_sck"  : 15,
+
+	"max_filament_weight" : 1000,
+	"mount_weight" : 17,
+
+	"conversion_a" : "-236.5709",
+	"conversion_b" : "-0.002405105",
+	"conversion_c" : "2.154818e-11"
 }
