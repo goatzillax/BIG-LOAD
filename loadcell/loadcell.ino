@@ -119,7 +119,7 @@ void loadcell_refresh() {
 			reading = loadcell.get_units(10);  //  some sort of async would be bettr but whatevs
 			// i legit do not know WTF this library is doing fr fr
 			weight = conversion_a + conversion_b*reading + conversion_c*reading*reading;
-			remaining = max_filament_weight - (full_weight - weight - mount_weight);
+			remaining = max_filament_weight - (full_weight - (weight - mount_weight));
 		}
 		else {
 			Serial.println("ur load bad mang");
