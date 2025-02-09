@@ -36,7 +36,9 @@ Has a spare hole on the side for an 4mm deep M3 threaded insert
 
 Make sure it doesn't make contact with the dead half of the load cell anywhere.
 
-Recommend putting mouse ears on the four extents.
+Also an alternate version because PLA seems have prtty hi friction against spools, esp. cardboard ones, so I wanted to make teflon surface.  butt only teflon i has is 4mm tubes, so I put some slots for those.
+
+Recommend putting mouse ears on the four extents, n also support teh screw holes duh.  Rest should bridge OK unless ur printr suuuxx.
 
 ## Todo:  NFC tags?
 
